@@ -1,0 +1,6 @@
+langchain
+langgraph
+sqlalchemy
+requests
+python-dotenv
+pytest
