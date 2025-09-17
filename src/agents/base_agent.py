@@ -1,9 +1,9 @@
 """
-Base agent utilities: wraps tools into LangChain Tools
+Base agent utilities: wraps tools into LangChain StructuredTools
 and provides shared logic for all agents.
 """
 
-from langchain.tools import Tool
+from langchain.tools import StructuredTool
 from src.tools.music_tools import (
     get_albums_by_artist,
     get_tracks_by_artist,
@@ -16,45 +16,49 @@ from src.tools.invoice_tools import (
     get_employee_by_invoice_and_customer,
 )
 
-#Music Tools
+# -----------------------------
+# 🎵 Music Tools
+# -----------------------------
 music_tools = [
-    Tool(
-        name="GetAlbumsByArtist",
+    StructuredTool.from_function(
         func=get_albums_by_artist,
-        description="Retrieve albums by a given artist. Input: artist name (str)."
+        name="GetAlbumsByArtist",
+        description="Fetch albums for a given artist. Args: artist (string). Output: JSON list of album titles."
     ),
-    Tool(
-        name="GetTracksByArtist",
+    StructuredTool.from_function(
         func=get_tracks_by_artist,
-        description="Retrieve tracks by a given artist. Input: artist name (str)."
+        name="GetTracksByArtist",
+        description="Fetch tracks for a given artist. Args: artist (string). Output: JSON list of track names."
     ),
-    Tool(
-        name="GetSongsByGenre",
+    StructuredTool.from_function(
         func=get_songs_by_genre,
-        description="Retrieve songs by a given genre. Input: genre name (str)."
+        name="GetSongsByGenre",
+        description="Fetch songs for a given genre. Args: genre (string). Output: JSON list of song titles."
     ),
-    Tool(
-        name="CheckForSongs",
+    StructuredTool.from_function(
         func=check_for_songs,
-        description="Check if a song exists by title. Input: song title (str)."
+        name="CheckForSongs",
+        description="Check if a song exists by title. Args: song_title (string). Output: { 'exists': true/false }."
     ),
 ]
 
-#Invoice Tools
+# -----------------------------
+# 🧾 Invoice Tools
+# -----------------------------
 invoice_tools = [
-    Tool(
-        name="GetInvoicesByCustomerSortedByDate",
+    StructuredTool.from_function(
         func=get_invoices_by_customer_sorted_by_date,
-        description="Retrieve invoices for a customer sorted by date. Input: customer_id (int)."
+        name="GetInvoicesByCustomerSortedByDate",
+        description="Fetch invoices for a customer sorted by date. Args: customer_id (int). Output: JSON list of invoices."
     ),
-    Tool(
-        name="GetInvoicesSortedByUnitPrice",
+    StructuredTool.from_function(
         func=get_invoices_sorted_by_unit_price,
-        description="Retrieve invoices for a customer sorted by unit price. Input: customer_id (int)."
+        name="GetInvoicesSortedByUnitPrice",
+        description="Fetch invoices for a customer sorted by unit price. Args: customer_id (int). Output: JSON list with InvoiceId & UnitPrice."
     ),
-    Tool(
-        name="GetEmployeeByInvoiceAndCustomer",
+    StructuredTool.from_function(
         func=get_employee_by_invoice_and_customer,
-        description="Retrieve the employee handling a given invoice for a customer. Input: invoice_id (int), customer_id (int)."
+        name="GetEmployeeByInvoiceAndCustomer",
+        description="Fetch the employee who handled a specific invoice. Args: invoice_id (int), customer_id (int). Output: JSON object with employee details."
     ),
 ]

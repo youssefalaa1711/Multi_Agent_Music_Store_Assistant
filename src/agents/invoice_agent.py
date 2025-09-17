@@ -1,30 +1,53 @@
 """
-Invoice Agent using Groq + LangChain tools.
+Invoice Agent: Handles queries about invoices and employees using invoice_tools.
 """
 
-from langchain_groq import ChatGroq
-from langchain.agents import initialize_agent, AgentType
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.agents import AgentExecutor, create_openai_functions_agent
 from src.agents.base_agent import invoice_tools
-from src.utils.config import GROQ_API_KEY
+from src.utils.config import OPENAI_API_KEY
 
 
 def build_invoice_agent():
-    llm = ChatGroq(
-        groq_api_key=GROQ_API_KEY,
-        model="openai/gpt-oss-120b",  # Groq’s recommended model for reasoning
-        temperature=0
+    # ✅ Use GPT-4o-mini for reliable tool calling
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0,
+        openai_api_key=OPENAI_API_KEY,
     )
 
-    agent = initialize_agent(
-        tools=invoice_tools,
+    # Strong system prompt to force tool usage
+    prompt = ChatPromptTemplate.from_messages([
+        ("system",
+         "You are an invoice assistant for a digital music store. "
+         "You MUST use the provided tools to answer questions. "
+         "Do not guess, do not format as markdown or tables. "
+         "Always return the tool’s raw JSON output directly."),
+        ("human", "{input}"),
+        MessagesPlaceholder("agent_scratchpad"),
+    ])
+
+    # Create the function-calling agent
+    agent = create_openai_functions_agent(
         llm=llm,
-        agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
-        verbose=True
+        tools=invoice_tools,
+        prompt=prompt,
     )
-    return agent
+
+    # Wrap into executor
+    return AgentExecutor(
+        agent=agent,
+        tools=invoice_tools,
+        verbose=True,
+        return_intermediate_steps=False,
+    )
 
 
 if __name__ == "__main__":
     agent = build_invoice_agent()
-    print(agent.run("Get the last 2 invoices for customer 1"))
-    print(agent.run("Which employee handled invoice 1 for customer 1?"))
+
+    # Demo queries
+    print(agent.invoke({"input": "Get the last 2 invoices for customer 1"}))
+    print(agent.invoke({"input": "Get invoices sorted by unit price for customer 1"}))
+    print(agent.invoke({"input": "Which employee handled invoice 1 for customer 1?"}))

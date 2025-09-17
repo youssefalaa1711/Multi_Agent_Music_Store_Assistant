@@ -8,8 +8,8 @@ from src.database.chinook_loader import get_chinook_db
 db = get_chinook_db()
 
 
-def get_albums_by_artist(artist: str) -> list[str]:
-    """Retrieve albums by a given artist."""
+def get_albums_by_artist(artist: str):
+    """Retrieve albums by a given artist. Returns list of album titles."""
     query = text("""
         SELECT Title
         FROM Album
@@ -18,11 +18,11 @@ def get_albums_by_artist(artist: str) -> list[str]:
     """)
     with db._engine.connect() as conn:
         result = conn.execute(query, {"artist": f"%{artist}%"}).fetchall()
-    return [row[0] for row in result]
+    return [row[0] for row in result]   # ✅ clean list
 
 
-def get_tracks_by_artist(artist: str) -> list[str]:
-    """Retrieve tracks by a given artist."""
+def get_tracks_by_artist(artist: str):
+    """Retrieve tracks by a given artist. Returns list of track names."""
     query = text("""
         SELECT Track.Name
         FROM Track
@@ -32,11 +32,11 @@ def get_tracks_by_artist(artist: str) -> list[str]:
     """)
     with db._engine.connect() as conn:
         result = conn.execute(query, {"artist": f"%{artist}%"}).fetchall()
-    return [row[0] for row in result]
+    return [row[0] for row in result]   # ✅ clean list
 
 
-def get_songs_by_genre(genre: str) -> list[str]:
-    """Retrieve songs by a given genre."""
+def get_songs_by_genre(genre: str):
+    """Retrieve songs by a given genre. Returns list of song titles."""
     query = text("""
         SELECT Track.Name
         FROM Track
@@ -45,11 +45,11 @@ def get_songs_by_genre(genre: str) -> list[str]:
     """)
     with db._engine.connect() as conn:
         result = conn.execute(query, {"genre": f"%{genre}%"}).fetchall()
-    return [row[0] for row in result]
+    return [row[0] for row in result]   # ✅ clean list
 
 
-def check_for_songs(song_title: str) -> bool:
-    """Check if a song exists by its title."""
+def check_for_songs(song_title: str):
+    """Check if a song exists by its title. Returns dict with {exists: bool}."""
     query = text("""
         SELECT COUNT(*)
         FROM Track
@@ -57,4 +57,5 @@ def check_for_songs(song_title: str) -> bool:
     """)
     with db._engine.connect() as conn:
         result = conn.execute(query, {"title": f"%{song_title}%"}).fetchone()
-    return result[0] > 0 if result else False
+    exists = result[0] > 0 if result else False
+    return {"exists": exists}   # ✅ clean dict

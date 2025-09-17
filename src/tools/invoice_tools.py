@@ -1,10 +1,15 @@
+"""
+Invoice-related tools for querying the Chinook DB.
+"""
+
+import json
 from sqlalchemy import text
 from src.database.chinook_loader import get_chinook_db
 
 db = get_chinook_db()
 
 
-def get_invoices_by_customer_sorted_by_date(customer_id: int) -> list[dict]:
+def get_invoices_by_customer_sorted_by_date(customer_id: int) -> str:
     """Retrieve all invoices for a customer, sorted by date (latest first)."""
     query = text("""
         SELECT InvoiceId, InvoiceDate, Total
@@ -15,10 +20,10 @@ def get_invoices_by_customer_sorted_by_date(customer_id: int) -> list[dict]:
     with db._engine.connect() as conn:
         result = conn.execute(query, {"customer_id": customer_id}).fetchall()
     invoices = [{"InvoiceId": row[0], "InvoiceDate": row[1], "Total": row[2]} for row in result]
-    return str(invoices)
+    return json.dumps(invoices, ensure_ascii=False, indent=2)
 
 
-def get_invoices_sorted_by_unit_price(customer_id: int) -> list[dict]:
+def get_invoices_sorted_by_unit_price(customer_id: int) -> str:
     """Retrieve invoices for a customer, sorted by unit price (highest first)."""
     query = text("""
         SELECT Invoice.InvoiceId, Track.UnitPrice
@@ -31,10 +36,10 @@ def get_invoices_sorted_by_unit_price(customer_id: int) -> list[dict]:
     with db._engine.connect() as conn:
         result = conn.execute(query, {"customer_id": customer_id}).fetchall()
     invoices = [{"InvoiceId": row[0], "UnitPrice": row[1]} for row in result]
-    return str(invoices)
+    return json.dumps(invoices, ensure_ascii=False, indent=2)
 
 
-def get_employee_by_invoice_and_customer(invoice_id: int, customer_id: int) -> dict | None:
+def get_employee_by_invoice_and_customer(invoice_id: int, customer_id: int) -> str:
     """Retrieve the employee who handled a given invoice for a customer."""
     query = text("""
         SELECT Employee.FirstName, Employee.LastName, Employee.Title
@@ -47,5 +52,7 @@ def get_employee_by_invoice_and_customer(invoice_id: int, customer_id: int) -> d
         result = conn.execute(query, {"invoice_id": invoice_id, "customer_id": customer_id}).fetchall()
     if result:
         row = result[0]
-        return {"FirstName": row[0], "LastName": row[1], "Title": row[2]}
-    return None
+        employee = {"FirstName": row[0], "LastName": row[1], "Title": row[2]}
+    else:
+        employee = {"Employee": None}
+    return json.dumps(employee, ensure_ascii=False, indent=2)
