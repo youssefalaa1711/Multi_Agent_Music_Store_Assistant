@@ -11,6 +11,7 @@ from langchain.memory import ConversationSummaryMemory
 from src.agents.music_agent import build_music_agent
 from src.agents.invoice_agent import build_invoice_agent
 from src.utils.config import OPENAI_API_KEY
+from src.memory.user_profile import user_profile
 
 # -------------------------
 # Global memory & persistence
@@ -100,8 +101,8 @@ def build_supervisor_agent():
 # Profile updater (LLM-powered)
 # -------------------------
 def _update_user_profile(user_text: str):
-    """Extract preferences using LLM and update profile."""
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    """Extract profile info from text using LLM and save into persistent user_profile."""
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
 
     extraction_prompt = ChatPromptTemplate.from_template("""
     Extract user profile info from this text:
@@ -111,29 +112,28 @@ def _update_user_profile(user_text: str):
     - name (string or null)
     - favorite_genres (list of strings)
     - favorite_artists (list of strings)
-    - preferences (dict)
+    - preferences (dict)   # e.g., {"mood": "happy", "activity": "workout"}
     """)
 
     try:
         response = llm.invoke(extraction_prompt.format_messages(text=user_text))
         data = json.loads(response.content)
 
+        # --- Save extracted data ---
         if data.get("name"):
-            user_profile["name"] = data["name"]
+            user_profile.set_name(data["name"])
 
         for genre in data.get("favorite_genres", []):
-            if genre not in user_profile["favorite_genres"]:
-                user_profile["favorite_genres"].append(genre)
+            user_profile.add_favorite_genre(genre)
 
         for artist in data.get("favorite_artists", []):
-            if artist not in user_profile["favorite_artists"]:
-                user_profile["favorite_artists"].append(artist)
+            user_profile.add_favorite_artist(artist)
 
-        user_profile["preferences"].update(data.get("preferences", {}))
+        for key, value in data.get("preferences", {}).items():
+            user_profile.set_preference(key, value)
 
-    except Exception:
-        # If LLM returns non-JSON, just ignore
-        pass
+    except Exception as e:
+        print(f"[Profile Update Error] {e}")
 
 
 # -------------------------
@@ -157,11 +157,18 @@ if __name__ == "__main__":
     supervisor = build_supervisor_agent()
 
     print(supervisor("Hello my name is Youssef. I like sad songs."))
-    print(supervisor("List albums by U2"))
-    print(supervisor("Get the last 2 invoices for customer 1"))
+    #print(supervisor("List albums by U2"))
+    #print(supervisor("Get the last 2 invoices for customer 1"))
 
     print("\n--- Conversation Memory ---")
     print(conversation_memory.load_memory_variables({}))
 
     print("\n--- User Profile ---")
-    print(user_profile)
+    #from src.memory.user_profile import user_profile
+#
+    #print("Name:", user_profile.data.get("name"))
+    #print("Favorite Genres:", user_profile.get_favorites()["genres"])
+    #print("Favorite Artists:", user_profile.get_favorites()["artists"])
+    #print("Favorite Songs:", user_profile.get_favorites()["songs"])
+    #print("Invoices:", user_profile.get_invoices())
+

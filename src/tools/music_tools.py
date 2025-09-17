@@ -1,7 +1,7 @@
 """
 Music-related tools for querying the Chinook DB.
 """
-
+import json
 from sqlalchemy import text
 from src.database.chinook_loader import get_chinook_db
 
@@ -59,3 +59,76 @@ def check_for_songs(song_title: str):
         result = conn.execute(query, {"title": f"%{song_title}%"}).fetchone()
     exists = result[0] > 0 if result else False
     return {"exists": exists}   # ✅ clean dict
+
+def fetch_all_genres():
+    """Load all genres from the Chinook DB into a list of strings."""
+    db = get_chinook_db()
+    query = text("SELECT Name FROM Genre")
+    with db._engine.connect() as conn:
+        result = conn.execute(query).fetchall()
+    return [row[0] for row in result]
+
+
+
+def list_all_genres():
+    query = text("SELECT GenreId, Name FROM Genre")
+    with db._engine.connect() as conn:
+        result = conn.execute(query).fetchall()
+    for gid, name in result:
+        print(f"{gid}: {name}")
+
+if __name__ == "__main__":
+    list_all_genres()
+    
+    
+    
+def _map_genre(requested: str) -> str:
+    """Map user-requested genre to closest available in DB."""
+    available_genres = [
+        "Rock", "Jazz", "Metal", "Alternative & Punk", "Rock And Roll",
+        "Blues", "Latin", "Reggae", "Pop", "Soundtrack", "Bossa Nova",
+        "Easy Listening", "Heavy Metal", "R&B/Soul", "Electronica/Dance",
+        "World", "Hip Hop/Rap", "Science Fiction", "TV Shows",
+        "Sci Fi & Fantasy", "Drama", "Comedy", "Alternative",
+        "Classical", "Opera"
+    ]
+    req = requested.lower()
+
+    # exact match
+    for g in available_genres:
+        if g.lower() == req:
+            return g
+
+    # crude fuzzy mapping
+    if "sad" in req or "emotional" in req:
+        return "Blues"
+    if "happy" in req or "party" in req or "dance" in req:
+        return "Pop"
+    if "chill" in req or "relax" in req or "calm" in req:
+        return "Easy Listening"
+    if "classic" in req:
+        return "Classical"
+    if "energetic" in req or "workout" in req:
+        return "Rock"
+    if "romantic" in req or "love" in req:
+        return "R&B/Soul"
+
+    # fallback
+    return "Pop"
+
+# --------------------------
+# DB Queries
+# --------------------------
+def get_songs_by_genre(genre: str) -> str:
+    """Retrieve songs by a given genre (with fuzzy mapping)."""
+    genre = _map_genre(genre)
+    query = text("""
+        SELECT Track.Name
+        FROM Track
+        JOIN Genre ON Track.GenreId = Genre.GenreId
+        WHERE Genre.Name = :genre
+    """)
+    with db._engine.connect() as conn:
+        result = conn.execute(query, {"genre": genre}).fetchall()
+    songs = [row[0] for row in result]
+    return json.dumps({"genre": genre, "songs": songs}, ensure_ascii=False)  
