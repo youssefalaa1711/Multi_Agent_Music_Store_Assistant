@@ -29,6 +29,7 @@ def _supervisor_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "output": output,
         }
 
+    # ✅ NEW: treat multi-intent or final answers as "done"
     return {
         **state,
         "output": output,
@@ -68,7 +69,7 @@ def build_workflow():
     # Normal pipeline
     graph.add_edge("load_memory", "supervisor")
 
-    # Supervisor may require human input
+    # Supervisor may require human input or finish directly
     graph.add_conditional_edges(
         "supervisor",
         lambda state: "human_input" if state.get("need_human") else "create_memory",

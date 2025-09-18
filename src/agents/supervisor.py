@@ -1,6 +1,6 @@
 """
 Supervisor Agent: Routes user queries to the correct specialized agent,
-uses predefined user_profile, and maintains conversation memory.
+handles multi-intents, and maintains conversation memory dynamically.
 """
 
 import json
@@ -11,12 +11,11 @@ from langchain.memory import ConversationSummaryMemory
 from src.agents.music_agent import build_music_agent
 from src.agents.invoice_agent import build_invoice_agent
 from src.utils.config import OPENAI_API_KEY
-from src.memory.user_profile import user_profile  # ✅ static profile dict
+from src.memory.user_profile import user_profile  # dynamic dict
 
 # -------------------------
 # Global memory & persistence
 # -------------------------
-
 MEMORY_FILE = Path("memory.json")
 
 conversation_memory = ConversationSummaryMemory(
@@ -34,16 +33,20 @@ def build_supervisor_agent():
 
     routing_prompt = ChatPromptTemplate.from_messages([
         ("system",
-         "You are a supervisor. You always have access to the user profile and past conversation.\n"
+         "You are a supervisor agent. You always have access to the user profile and past conversation.\n"
          "User Profile: {profile}\n"
          "Conversation History: {history}\n\n"
          "Decide which specialist agent should handle the query.\n"
-         "Options: 'music' for artist/track/genre queries, 'invoice' for customer/invoice/employee queries.\n"
-         "If the user asks about themselves (e.g. their name, favorites, preferences), "
+         "- Use 'music' for artist/track/genre queries.\n"
+         "- Use 'invoice' for customer/invoice/employee queries.\n"
+         "- If BOTH domains are present, return 'music, invoice'.\n"
+         "- If the user asks about themselves (name, favorites, preferences), "
          "answer directly using the profile or memory.\n"
-         "Respond ONLY with one word ('music' or 'invoice'), "
-         "'music, invoice' for multi-intent, "
-         "or a direct answer (if profile/memory is enough)."),
+         "⚠️ Respond ONLY with one of these:\n"
+         "  • 'music'\n"
+         "  • 'invoice'\n"
+         "  • 'music, invoice'\n"
+         "  • or a direct natural-language answer if memory/profile is enough."),
         ("human", "{input}")
     ])
 
@@ -62,7 +65,7 @@ def build_supervisor_agent():
             for msg in conversation_memory.chat_memory.messages
         ])
 
-        # Decide routing or answer directly
+        # Supervisor decides
         decision = _llm.invoke(
             routing_prompt.format_messages(
                 input=input_text,
@@ -70,9 +73,11 @@ def build_supervisor_agent():
                 profile=json.dumps(user_profile, indent=2)
             )
         )
-
         choice = decision.content.strip().lower()
 
+        # -------------------------
+        # Handle cases
+        # -------------------------
         if choice == "music":
             result = music_agent.invoke({"input": input_text})
             output = result.get("output", str(result))
@@ -82,9 +87,12 @@ def build_supervisor_agent():
             output = result.get("output", str(result))
 
         elif "music" in choice and "invoice" in choice:
-            # ✅ NEW: Multi-intent handling
-            music_result = music_agent.invoke({"input": input_text})
-            invoice_result = invoice_agent.invoke({"input": input_text})
+            # ✅ Multi-intent: split query into sub-queries
+            music_query = f"Music-related part of user query: {input_text}"
+            invoice_query = f"Invoice-related part of user query: {input_text}"
+
+            music_result = music_agent.invoke({"input": music_query})
+            invoice_result = invoice_agent.invoke({"input": invoice_query})
 
             output = (
                 "🎵 Music Result:\n"
@@ -94,19 +102,18 @@ def build_supervisor_agent():
             )
 
         else:
-            # If it’s not strictly "music" or "invoice", treat it as direct answer
+            # Direct answer (from profile/memory)
             output = choice
 
-        # Save assistant response into memory
+        # -------------------------
+        # Save & persist
+        # -------------------------
         conversation_memory.chat_memory.add_ai_message(output)
-
-        # Persist memory state + static user profile
         _persist_memory()
 
         return output
 
     return route
-
 
 
 # -------------------------
@@ -124,7 +131,7 @@ def _persist_memory():
             "profile": user_profile,
             "conversation": convo_text
         }
-        MEMORY_FILE.write_text(json.dumps(state, indent=2))
+        MEMORY_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False))
     except Exception as e:
         print(f"[Persist Error] {e}")
 
@@ -136,14 +143,17 @@ if __name__ == "__main__":
     supervisor = build_supervisor_agent()
 
     print("\n--- Test 1: Profile Debug ---")
-    print(f"Loaded profile for {user_profile['name']} ({user_profile['email']})")
-    print(f"Favorite genres: {user_profile['favorites']['genres']}")
-    print(f"Favorite artists: {user_profile['favorites']['artists']}")
+    print(f"Loaded profile for {user_profile.get('name')} ({user_profile.get('email')})")
+    print(f"Favorite genres: {user_profile['favorites'].get('genres')}")
+    print(f"Favorite artists: {user_profile['favorites'].get('artists')}")
     print(f"Preferences: {user_profile['preferences']}")
     print("-" * 50)
 
-    print("\n--- Test 2: Music Query (should lean on profile genres) ---")
+    print("\n--- Test 2: Music Query ---")
     print(supervisor("Recommend me some music for studying"))
 
-    print("\n--- Test 3: Invoice Query (profile customer_id=1 should be relevant) ---")
+    print("\n--- Test 3: Invoice Query ---")
     print(supervisor("Get the last 2 invoices for my account"))
+
+    print("\n--- Test 4: Multi-Intent Query ---")
+    print(supervisor("How much was my last purchase and give me 3 songs by Drake"))
