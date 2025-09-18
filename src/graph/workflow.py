@@ -85,17 +85,11 @@ def build_workflow():
 if __name__ == "__main__":
     app = build_workflow()
 
-    # ✅ Test 1: Music query (no clarification needed)
-    result = app.invoke({"input": "List albums by U2"})
-    print("\n[MUSIC RESULT]")
-    print(result.get("output", ""))
+    print("🎵 Welcome to the Music Store Chatbot! Type 'exit' to quit.")
+    while True:
+        user_input = input("\nYou: ")
+        if user_input.lower() in {"exit", "quit"}:
+            break
 
-    # ✅ Test 2: Invoice query (customer_id missing → human loop expected)
-    result = app.invoke({"input": "Show me my last 2 invoices"})
-    print("\n[INVOICE RESULT]")
-    print(result.get("output", ""))
-
-    # ✅ Test 3: Mixed query (supervisor decides, may trigger human loop)
-    result = app.invoke({"input": "My name is Youssef; also recommend songs to study"})
-    print("\n[MIXED RESULT]")
-    print(result.get("output", ""))
+        result = app.invoke({"input": user_input})
+        print("Bot:", result.get("output", ""))

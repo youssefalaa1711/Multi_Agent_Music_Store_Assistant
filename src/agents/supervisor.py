@@ -30,13 +30,19 @@ conversation_memory = ConversationSummaryMemory(
 # Supervisor Builder
 # -------------------------
 def build_supervisor_agent():
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
+    _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
 
     routing_prompt = ChatPromptTemplate.from_messages([
         ("system",
-         "You are a supervisor. Decide which specialist agent should handle the query.\n"
+         "You are a supervisor. You always have access to the user profile and past conversation.\n"
+         "User Profile: {profile}\n"
+         "Conversation History: {history}\n\n"
+         "Decide which specialist agent should handle the query.\n"
          "Options: 'music' for artist/track/genre queries, 'invoice' for customer/invoice/employee queries.\n"
-         "Respond ONLY with one word: 'music' or 'invoice'."),
+         "If the user asks about themselves (e.g. their name, favorites, preferences), "
+         "answer directly using the profile or memory.\n"
+         "Respond ONLY with one word ('music' or 'invoice') when routing, "
+         "otherwise answer the user."),
         ("human", "{input}")
     ])
 
@@ -44,23 +50,37 @@ def build_supervisor_agent():
     invoice_agent = build_invoice_agent(memory=conversation_memory)
 
     def route(input_text: str):
-        """Route query, use memory, and return results."""
+        """Route query, use memory + profile, and return results."""
 
         # Save user query into memory
         conversation_memory.chat_memory.add_user_message(input_text)
 
-        # Decide which agent should handle it
-        decision = llm.invoke(routing_prompt.format_messages(input=input_text))
+        # Get conversation history
+        history = "\n".join([
+            f"{msg.type.upper()}: {msg.content}"
+            for msg in conversation_memory.chat_memory.messages
+        ])
+
+        # Decide routing or answer directly
+        decision = _llm.invoke(
+            routing_prompt.format_messages(
+                input=input_text,
+                history=history,
+                profile=json.dumps(user_profile, indent=2)
+            )
+        )
+
         choice = decision.content.strip().lower()
 
-        if "music" in choice:
+        if choice == "music":
             result = music_agent.invoke({"input": input_text})
             output = result.get("output", str(result))
-        elif "invoice" in choice:
+        elif choice == "invoice":
             result = invoice_agent.invoke({"input": input_text})
             output = result.get("output", str(result))
         else:
-            output = "Sorry, I couldn’t decide which agent should handle this."
+            # If it’s not strictly "music" or "invoice", treat it as direct answer
+            output = choice
 
         # Save assistant response into memory
         conversation_memory.chat_memory.add_ai_message(output)
@@ -78,7 +98,6 @@ def build_supervisor_agent():
 # -------------------------
 def _persist_memory():
     try:
-        # Get conversation as plain strings
         convo = conversation_memory.chat_memory.messages
         convo_text = [
             {"role": msg.type, "content": msg.content}
@@ -93,6 +112,7 @@ def _persist_memory():
     except Exception as e:
         print(f"[Persist Error] {e}")
 
+
 # -------------------------
 # Demo
 # -------------------------
@@ -100,7 +120,6 @@ if __name__ == "__main__":
     supervisor = build_supervisor_agent()
 
     print("\n--- Test 1: Profile Debug ---")
-    from src.memory.user_profile import user_profile
     print(f"Loaded profile for {user_profile['name']} ({user_profile['email']})")
     print(f"Favorite genres: {user_profile['favorites']['genres']}")
     print(f"Favorite artists: {user_profile['favorites']['artists']}")
