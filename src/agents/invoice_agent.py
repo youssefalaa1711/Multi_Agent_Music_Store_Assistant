@@ -22,6 +22,7 @@ def build_invoice_agent(memory: Optional[object] = None):
          "You are an invoice assistant for a digital music store. "
          "You MUST use the provided tools to answer questions. "
          "Do not guess or summarize. "
+         "You must know or have the ID "
          "Return the tool’s raw JSON output directly."),
         ("human", "{input}"),
         MessagesPlaceholder("agent_scratchpad"),

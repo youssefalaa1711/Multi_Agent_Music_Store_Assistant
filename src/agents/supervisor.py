@@ -41,8 +41,9 @@ def build_supervisor_agent():
          "Options: 'music' for artist/track/genre queries, 'invoice' for customer/invoice/employee queries.\n"
          "If the user asks about themselves (e.g. their name, favorites, preferences), "
          "answer directly using the profile or memory.\n"
-         "Respond ONLY with one word ('music' or 'invoice') when routing, "
-         "otherwise answer the user."),
+         "Respond ONLY with one word ('music' or 'invoice'), "
+         "'music, invoice' for multi-intent, "
+         "or a direct answer (if profile/memory is enough)."),
         ("human", "{input}")
     ])
 
@@ -75,9 +76,23 @@ def build_supervisor_agent():
         if choice == "music":
             result = music_agent.invoke({"input": input_text})
             output = result.get("output", str(result))
+
         elif choice == "invoice":
             result = invoice_agent.invoke({"input": input_text})
             output = result.get("output", str(result))
+
+        elif "music" in choice and "invoice" in choice:
+            # ✅ NEW: Multi-intent handling
+            music_result = music_agent.invoke({"input": input_text})
+            invoice_result = invoice_agent.invoke({"input": input_text})
+
+            output = (
+                "🎵 Music Result:\n"
+                f"{music_result.get('output', str(music_result))}\n\n"
+                "📄 Invoice Result:\n"
+                f"{invoice_result.get('output', str(invoice_result))}"
+            )
+
         else:
             # If it’s not strictly "music" or "invoice", treat it as direct answer
             output = choice
@@ -91,6 +106,7 @@ def build_supervisor_agent():
         return output
 
     return route
+
 
 
 # -------------------------

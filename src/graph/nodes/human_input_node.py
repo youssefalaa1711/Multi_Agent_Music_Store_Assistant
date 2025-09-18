@@ -12,7 +12,7 @@ def human_input_node(state: Dict[str, Any]) -> Dict[str, Any]:
     print("\n[HUMAN INPUT REQUIRED] The system needs clarification.\n")
 
     # Case 1: Missing customer_id for invoices
-    if "invoice" in user_query and "customer_id" not in user_query:
+    if "invoice"  or "purchase"in user_query and "customer_id" not in user_query:
         customer_id = input("👉 Please provide your customer ID: ")
         state["input"] = f"{state['input']} customer_id {customer_id}"
         state["need_human"] = False
