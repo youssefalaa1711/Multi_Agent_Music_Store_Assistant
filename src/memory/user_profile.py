@@ -8,7 +8,7 @@ user_profile = {
     "email": "youssefalaanassar932004@gmail.com",
     "customer_id": "",
     "favorites": {
-        "genres": ["", ""],
+        "genres": ["Blues", "Rock"],
         "songs": ["Tears In Heaven", "Layla"],
         "artists": ["Eric Clapton", "U2"]
     },

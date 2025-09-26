@@ -17,24 +17,17 @@ from src.graph.nodes.human_input_node import human_input_node
 # Wrap Supervisor
 # -----------------------------
 def _supervisor_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    profile = state.get("profile", {})  # comes from verify_info
     supervisor = build_supervisor_agent()
+
     user_text = state.get("input", "") or ""
-    output = supervisor(user_text)
+    output = supervisor(user_text, profile=profile)  # <-- pass profile!
 
-    # Detect if the supervisor is asking for clarification
     if isinstance(output, str) and "please provide" in output.lower():
-        return {
-            **state,
-            "need_human": True,
-            "output": output,
-        }
+        return {**state, "need_human": True, "output": output}
 
-    # ✅ NEW: treat multi-intent or final answers as "done"
-    return {
-        **state,
-        "output": output,
-        "need_human": False,
-    }
+    return {**state, "output": output, "need_human": False}
+
 
 
 # -----------------------------
