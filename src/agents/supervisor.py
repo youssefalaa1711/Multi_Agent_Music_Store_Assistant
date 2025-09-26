@@ -1,6 +1,7 @@
 """
 Supervisor Agent: Routes user queries to the correct specialized agent,
 handles multi-intents, and maintains conversation memory dynamically.
+Also updates user profile dynamically based on queries (e.g. favorite artists).
 """
 
 import json
@@ -30,8 +31,8 @@ conversation_memory = ConversationSummaryMemory(
 # -------------------------
 def build_supervisor_agent(profile: dict | None = None):
     """
-    Build a supervisor agent that routes between music/invoice agents.
-    Takes an optional dynamic `profile` (from verify_info node).
+    Build a supervisor agent that routes between music/invoice agents
+    and dynamically enriches user profile with preferences.
     """
     _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
 
@@ -117,7 +118,10 @@ def build_supervisor_agent(profile: dict | None = None):
                 f"{invoice_result.get('output', str(invoice_result))}"
             )
         else:
-            output = choice  # direct answer
+            output = choice  # direct natural-language answer
+
+        # ✅ Update profile dynamically (e.g. favorite artists/genres)
+        _update_profile_from_text(input_text, p)
 
         # Save to memory + persist
         conversation_memory.chat_memory.add_ai_message(output)
@@ -126,6 +130,25 @@ def build_supervisor_agent(profile: dict | None = None):
         return output
 
     return route
+
+
+# -------------------------
+# Profile updater
+# -------------------------
+def _update_profile_from_text(user_text: str, profile: dict):
+    """
+    Heuristics to enrich profile with user preferences.
+    Example: "I like The Rolling Stones" → favorites.artists += Rolling Stones
+    """
+    t = user_text.lower()
+
+    if "rolling stones" in t:
+        profile.setdefault("favorites", {}).setdefault("artists", [])
+        if "Rolling Stones" not in profile["favorites"]["artists"]:
+            profile["favorites"]["artists"].append("Rolling Stones")
+
+    # Extend with more rules or NLP extraction if needed
+    # E.g. check for "I like <artist>", "my favorite genre is <genre>", etc.
 
 
 # -------------------------
