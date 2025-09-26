@@ -1,7 +1,7 @@
 """
 Supervisor Agent: Routes user queries to the correct specialized agent,
 handles multi-intents, and maintains conversation memory dynamically.
-Also updates user profile dynamically based on queries (e.g. favorite artists).
+Also updates user profile dynamically (e.g. favorites, phone).
 """
 
 import json
@@ -32,7 +32,7 @@ conversation_memory = ConversationSummaryMemory(
 def build_supervisor_agent(profile: dict | None = None):
     """
     Build a supervisor agent that routes between music/invoice agents
-    and dynamically enriches user profile with preferences.
+    and dynamically enriches user profile with preferences + phone.
     """
     _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
 
@@ -47,6 +47,7 @@ def build_supervisor_agent(profile: dict | None = None):
             "Name: {name}\n"
             "Email: {email}\n"
             "Customer ID: {customer_id}\n"
+            "Phone: {phone}\n"
             "Favorites: {favorites}\n"
             "Preferences: {preferences}\n\n"
             "Conversation History:\n{history}\n\n"
@@ -54,7 +55,7 @@ def build_supervisor_agent(profile: dict | None = None):
             "- Use 'music' for artist/track/genre queries.\n"
             "- Use 'invoice' for customer/invoice/employee queries.\n"
             "- If BOTH domains are present, return 'music, invoice'.\n"
-            "- If the user asks about themselves (name, favorites, preferences), "
+            "- If the user asks about themselves (name, favorites, preferences, phone), "
             "answer directly using the profile or memory.\n"
             "⚠️ Respond ONLY with one of these:\n"
             "  • 'music'\n"
@@ -89,6 +90,7 @@ def build_supervisor_agent(profile: dict | None = None):
                 name=p.get("name", "Unknown"),
                 email=p.get("email", "Unknown"),
                 customer_id=p.get("customer_id", "Unknown"),
+                phone=p.get("phone", "Unknown"),
                 favorites=json.dumps(p.get("favorites", {})),
                 preferences=json.dumps(p.get("preferences", {})),
             )
@@ -101,26 +103,58 @@ def build_supervisor_agent(profile: dict | None = None):
             output = result.get("output", str(result))
 
         elif choice == "invoice":
-            result = invoice_agent.invoke({"input": input_text})
+            query = input_text
+            if p.get("phone"):
+                query = f"{query} phone {p['phone']}"
+            result = invoice_agent.invoke({"input": query})
             output = result.get("output", str(result))
 
         elif "music" in choice and "invoice" in choice:
-            music_query = f"Music-related part of user query: {input_text}"
-            invoice_query = f"Invoice-related part of user query: {input_text}"
+            splitter_prompt = (
+                "The following user query contains both a music-related request "
+                "and an invoice-related request.\n"
+                f"Query: {input_text}\n\n"
+                "Return JSON strictly in this format:\n"
+                "{\n"
+                "  \"music\": \"<music-only request>\",\n"
+                "  \"invoice\": \"<invoice-only request>\"\n"
+                "}"
+            )
+
+            split = _llm.invoke(splitter_prompt)
+            try:
+                parts = json.loads(split.content)
+                music_query = parts.get("music", "").strip() or input_text
+                invoice_query = parts.get("invoice", "").strip() or input_text
+            except Exception:
+                music_query = input_text
+                invoice_query = input_text
+
+            if p.get("phone"):
+                invoice_query = f"{invoice_query} phone {p['phone']}"
 
             music_result = music_agent.invoke({"input": music_query})
             invoice_result = invoice_agent.invoke({"input": invoice_query})
 
+            music_output = music_result.get("output", str(music_result))
+            invoice_output = invoice_result.get("output", str(invoice_result))
+
+            if any(word in invoice_output.lower() for word in ["album", "artist", "song", "track"]):
+                invoice_output = "\n".join(
+                    line for line in invoice_output.splitlines()
+                    if not any(word in line.lower() for word in ["album", "artist", "song", "track"])
+                ).strip()
+
             output = (
                 "🎵 Music Result:\n"
-                f"{music_result.get('output', str(music_result))}\n\n"
+                f"{music_output}\n\n"
                 "📄 Invoice Result:\n"
-                f"{invoice_result.get('output', str(invoice_result))}"
+                f"{invoice_output}"
             )
         else:
             output = choice  # direct natural-language answer
 
-        # ✅ Update profile dynamically (e.g. favorite artists/genres)
+        # ✅ Update profile dynamically (favorites + phone)
         _update_profile_from_text(input_text, p)
 
         # Save to memory + persist
@@ -138,17 +172,19 @@ def build_supervisor_agent(profile: dict | None = None):
 def _update_profile_from_text(user_text: str, profile: dict):
     """
     Heuristics to enrich profile with user preferences.
-    Example: "I like The Rolling Stones" → favorites.artists += Rolling Stones
     """
     t = user_text.lower()
+
+    # Extract phone number
+    import re
+    phone_match = re.search(r"\+?\d[\d\-\(\)\s]+", user_text)
+    if phone_match:
+        profile["phone"] = phone_match.group().strip()
 
     if "rolling stones" in t:
         profile.setdefault("favorites", {}).setdefault("artists", [])
         if "Rolling Stones" not in profile["favorites"]["artists"]:
             profile["favorites"]["artists"].append("Rolling Stones")
-
-    # Extend with more rules or NLP extraction if needed
-    # E.g. check for "I like <artist>", "my favorite genre is <genre>", etc.
 
 
 # -------------------------
