@@ -24,6 +24,7 @@ conversation_memory = ConversationSummaryMemory(
     memory_key="chat_history",
     return_messages=True,
 )
+conversation_memory.chat_memory.clear()
 
 # -------------------------
 # Pending action memory
@@ -165,7 +166,8 @@ def build_supervisor_agent(profile: dict | None = None):
                 f"{invoice_output}"
             )
         else:
-            output = choice  # direct natural-language answer
+            # ✅ Only treat as direct answer if it's not one of the routing keywords
+            output = decision.content.strip()
 
         # ✅ Update profile dynamically (favorites + phone)
         _update_profile_from_text(input_text, p)

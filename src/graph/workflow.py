@@ -12,11 +12,12 @@ from src.graph.nodes.memory_node import load_memory, create_memory
 from src.agents.supervisor import build_supervisor_agent
 from src.graph.nodes.human_input_node import human_input_node
 from src.agents import supervisor
+from pathlib import Path
 
-# Clear any existing memory on startup for a fresh session
-supervisor.conversation_memory.clear()
-if supervisor.MEMORY_FILE.exists():
-    supervisor.MEMORY_FILE.unlink()
+
+MEMORY_FILE = Path("memory.json")
+if MEMORY_FILE.exists():
+    MEMORY_FILE.unlink()
 
 # -----------------------------
 # Wrap Supervisor
