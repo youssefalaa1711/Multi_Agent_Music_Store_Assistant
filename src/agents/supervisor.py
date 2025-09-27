@@ -25,6 +25,11 @@ conversation_memory = ConversationSummaryMemory(
     return_messages=True,
 )
 
+# -------------------------
+# Pending action memory
+# -------------------------
+pending_action = None
+
 
 # -------------------------
 # Supervisor Builder
@@ -70,8 +75,16 @@ def build_supervisor_agent(profile: dict | None = None):
     invoice_agent = build_invoice_agent(memory=conversation_memory)
 
     def route(input_text: str, profile: dict | None = None):
-        # Final profile resolution
+        global pending_action
         p = profile or profile_data
+
+        # --- Confirmation handler ---
+        yes_words = {"yes", "yep", "yeah", "sure", "ok", "okay"}
+        if input_text.strip().lower() in yes_words and pending_action:
+            if pending_action["type"] == "songs_by_fav":
+                artist = pending_action["artist"]
+                input_text = f"List songs by {artist}"
+                pending_action = None
 
         # Save user query into memory
         conversation_memory.chat_memory.add_user_message(input_text)
@@ -157,6 +170,12 @@ def build_supervisor_agent(profile: dict | None = None):
         # ✅ Update profile dynamically (favorites + phone)
         _update_profile_from_text(input_text, p)
 
+        # ✅ If user asked about preferences and we have favorites → suggest + store pending action
+        if "preference" in input_text.lower() and p.get("favorites", {}).get("artists"):
+            fav_artist = p["favorites"]["artists"][0]
+            output += f"\n\nWould you like to hear songs by {fav_artist}? (yes/no)"
+            pending_action = {"type": "songs_by_fav", "artist": fav_artist}
+
         # Save to memory + persist
         conversation_memory.chat_memory.add_ai_message(output)
         _persist_memory(p)
@@ -169,22 +188,59 @@ def build_supervisor_agent(profile: dict | None = None):
 # -------------------------
 # Profile updater
 # -------------------------
+_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
 def _update_profile_from_text(user_text: str, profile: dict):
     """
-    Heuristics to enrich profile with user preferences.
+    Dynamically enriches profile with phone numbers and music preferences.
     """
+    import re
     t = user_text.lower()
 
-    # Extract phone number
-    import re
+    # --- Phone extraction ---
     phone_match = re.search(r"\+?\d[\d\-\(\)\s]+", user_text)
     if phone_match:
         profile["phone"] = phone_match.group().strip()
 
-    if "rolling stones" in t:
-        profile.setdefault("favorites", {}).setdefault("artists", [])
-        if "Rolling Stones" not in profile["favorites"]["artists"]:
-            profile["favorites"]["artists"].append("Rolling Stones")
+    # --- Artist/genre/song extraction via LLM ---
+    extraction_prompt = f"""
+    Extract the artist(s), genre(s), or song(s) mentioned in the text.
+    Return JSON strictly in this format:
+    {{
+      "artists": [],
+      "genres": [],
+      "songs": []
+    }}
+    Text: "{user_text}"
+    """
+
+    try:
+        result = _llm.invoke(extraction_prompt)
+        data = {}
+        import json
+        data = json.loads(result.content)
+
+        # Update profile safely
+        if data.get("artists"):
+            profile.setdefault("favorites", {}).setdefault("artists", [])
+            for a in data["artists"]:
+                if a not in profile["favorites"]["artists"]:
+                    profile["favorites"]["artists"].append(a)
+
+        if data.get("genres"):
+            profile.setdefault("favorites", {}).setdefault("genres", [])
+            for g in data["genres"]:
+                if g not in profile["favorites"]["genres"]:
+                    profile["favorites"]["genres"].append(g)
+
+        if data.get("songs"):
+            profile.setdefault("favorites", {}).setdefault("songs", [])
+            for s in data["songs"]:
+                if s not in profile["favorites"]["songs"]:
+                    profile["favorites"]["songs"].append(s)
+
+    except Exception as e:
+        print(f"[Profile update error] {e}")
 
 
 # -------------------------
