@@ -42,7 +42,7 @@ def build_supervisor_agent(profile: dict | None = None):
     """
     _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=OPENAI_API_KEY)
 
-    # ✅ Use dynamic profile if passed, otherwise fallback to static
+    #  Use dynamic profile if passed, otherwise fallback to static
     profile_data = profile or static_profile
 
     routing_prompt = ChatPromptTemplate.from_messages([
@@ -63,7 +63,7 @@ def build_supervisor_agent(profile: dict | None = None):
             "- If BOTH domains are present, return 'music, invoice'.\n"
             "- If the user asks about themselves (name, favorites, preferences, phone), "
             "answer directly using the profile or memory.\n"
-            "⚠️ Respond ONLY with one of these:\n"
+            " Respond ONLY with one of these:\n"
             "  • 'music'\n"
             "  • 'invoice'\n"
             "  • 'music, invoice'\n"
