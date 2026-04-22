@@ -166,13 +166,13 @@ def build_supervisor_agent(profile: dict | None = None):
                 f"{invoice_output}"
             )
         else:
-            # ✅ Only treat as direct answer if it's not one of the routing keywords
+            #  Only treat as direct answer if it's not one of the routing keywords
             output = decision.content.strip()
 
-        # ✅ Update profile dynamically (favorites + phone)
+        #  Update profile dynamically (favorites + phone)
         _update_profile_from_text(input_text, p)
 
-        # ✅ If user asked about preferences and we have favorites → suggest + store pending action
+        #  If user asked about preferences and we have favorites → suggest + store pending action
         if "preference" in input_text.lower() and p.get("favorites", {}).get("artists"):
             fav_artist = p["favorites"]["artists"][0]
             output += f"\n\nWould you like to hear songs by {fav_artist}? (yes/no)"
